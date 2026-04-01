@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::runtime::{BlockReason, WakeNotifier};
 use crate::TaskId;
 
+use super::random::RandomStrategy;
 use super::strategy::{FifoStrategy, ScheduleStrategy, Strategy};
 
 /// The core scheduler that manages task states and selection.
@@ -29,9 +30,8 @@ impl Scheduler {
     pub fn new(strategy: Strategy) -> Self {
         let strategy_impl: Box<dyn ScheduleStrategy> = match strategy {
             Strategy::Fifo => Box::new(FifoStrategy::new()),
-            Strategy::Random { seed: _ } => {
-                // Will be implemented in Task 7
-                Box::new(FifoStrategy::new())
+            Strategy::Random { seed } => {
+                Box::new(RandomStrategy::new(seed))
             }
             Strategy::DepthFirst { max_depth: _ } => {
                 Box::new(FifoStrategy::new())
