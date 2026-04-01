@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::runtime::{BlockReason, WakeNotifier};
 use crate::TaskId;
 
+use super::pct::PCTStrategy;
 use super::random::RandomStrategy;
 use super::strategy::{FifoStrategy, ScheduleStrategy, Strategy};
 
@@ -36,9 +37,8 @@ impl Scheduler {
             Strategy::DepthFirst { max_depth: _ } => {
                 Box::new(FifoStrategy::new())
             }
-            Strategy::PCT { seed: _, bug_depth: _ } => {
-                // Will be implemented in Task 8
-                Box::new(FifoStrategy::new())
+            Strategy::PCT { seed, bug_depth } => {
+                Box::new(PCTStrategy::new(seed, bug_depth))
             }
             Strategy::ContextBound { max_preemptions: _ } => {
                 Box::new(FifoStrategy::new())
