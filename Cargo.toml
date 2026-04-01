@@ -1,0 +1,31 @@
+[package]
+name = "chronos"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic simulation testing framework for distributed systems"
+license = "MIT"
+repository = "https://github.com/sudokatie/chronos"
+keywords = ["testing", "simulation", "distributed-systems", "deterministic"]
+categories = ["development-tools::testing", "simulation"]
+
+[dependencies]
+tokio = { version = "1.36", features = ["rt", "sync", "time", "macros"] }
+rand = { version = "0.8", features = ["small_rng"] }
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+toml = "0.8"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+thiserror = "2.0"
+petgraph = "0.6"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[[bin]]
+name = "chronos"
+path = "src/main.rs"
+
+[lib]
+name = "chronos"
+path = "src/lib.rs"
