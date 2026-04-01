@@ -5,6 +5,7 @@
 //! distributed systems before they find you.
 
 pub mod error;
+pub mod network;
 pub mod prelude;
 pub mod runtime;
 pub mod scheduler;
