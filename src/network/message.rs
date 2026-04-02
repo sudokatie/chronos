@@ -73,7 +73,7 @@ impl Message {
 
 /// A message in flight with scheduled delivery time.
 #[derive(Clone, Debug)]
-pub(crate) struct InFlightMessage {
+pub(super) struct InFlightMessage {
     /// The message being delivered.
     pub msg: Message,
     /// Simulated time when the message will be delivered.
