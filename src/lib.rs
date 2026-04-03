@@ -7,6 +7,7 @@
 pub mod error;
 pub mod network;
 pub mod prelude;
+pub mod recording;
 pub mod runtime;
 pub mod scheduler;
 pub mod time;
