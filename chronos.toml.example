@@ -1,0 +1,51 @@
+# Chronos Configuration Example
+# Copy to chronos.toml and customize
+
+[scheduler]
+# Scheduling strategy: fifo, random, or pct
+strategy = "random"
+
+# Random seed (0 = use system time for each run)
+seed = 0
+
+# PCT depth parameter (only used with pct strategy)
+pct_depth = 3
+
+# Maximum simulation steps before timeout
+max_steps = 1000000
+
+[network]
+# Base network latency in milliseconds
+latency_ms = 10
+
+# Latency jitter in milliseconds
+jitter_ms = 5
+
+# Packet drop rate (0.0 - 1.0)
+drop_rate = 0.0
+
+# Packet duplicate rate (0.0 - 1.0)
+duplicate_rate = 0.0
+
+# Maximum in-flight messages
+max_in_flight = 10000
+
+[detection]
+# Enable deadlock detection (wait-graph cycle detection)
+deadlock_detection = true
+
+# Enable livelock detection (progress tracking)
+livelock_detection = true
+
+# Steps without progress before flagging livelock
+livelock_threshold = 1000
+
+[recording]
+# Enable execution recording
+enabled = false
+
+# Directory for recording files
+output_dir = "./recordings"
+
+# Compress recordings
+compress = true
