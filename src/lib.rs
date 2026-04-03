@@ -6,6 +6,7 @@
 
 pub mod cli;
 pub mod cluster;
+pub mod config;
 pub mod detection;
 pub mod error;
 pub mod network;
