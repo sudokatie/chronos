@@ -5,6 +5,7 @@
 //! distributed systems before they find you.
 
 pub mod cluster;
+pub mod detection;
 pub mod error;
 pub mod network;
 pub mod prelude;
