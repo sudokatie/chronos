@@ -4,6 +4,7 @@
 //! execution, fault injection, and schedule exploration. Find bugs in your
 //! distributed systems before they find you.
 
+pub mod cluster;
 pub mod error;
 pub mod network;
 pub mod prelude;
