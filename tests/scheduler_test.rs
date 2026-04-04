@@ -16,10 +16,10 @@ fn test_fifo_scheduler() {
     assert_eq!(t3, 2);
     
     // FIFO order
-    assert_eq!(scheduler.next(), Some(0));
-    assert_eq!(scheduler.next(), Some(1));
-    assert_eq!(scheduler.next(), Some(2));
-    assert_eq!(scheduler.next(), None);
+    assert_eq!(scheduler.select_next(), Some(0));
+    assert_eq!(scheduler.select_next(), Some(1));
+    assert_eq!(scheduler.select_next(), Some(2));
+    assert_eq!(scheduler.select_next(), None);
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn test_random_scheduler_deterministic() {
     
     // Should produce same sequence with same seed
     for _ in 0..5 {
-        assert_eq!(s1.next(), s2.next());
+        assert_eq!(s1.select_next(), s2.select_next());
     }
 }
 
@@ -106,12 +106,12 @@ fn test_scheduler_block_unblock() {
     scheduler.mark_blocked(t1, chronos::runtime::BlockReason::Channel);
     
     // Only t2 should be ready
-    assert_eq!(scheduler.next(), Some(t2));
-    assert_eq!(scheduler.next(), None);
+    assert_eq!(scheduler.select_next(), Some(t2));
+    assert_eq!(scheduler.select_next(), None);
     
     // Unblock t1
     scheduler.mark_ready(t1);
-    assert_eq!(scheduler.next(), Some(t1));
+    assert_eq!(scheduler.select_next(), Some(t1));
 }
 
 #[test]
@@ -125,8 +125,8 @@ fn test_scheduler_remove_task() {
     scheduler.remove_task(t2);
     
     assert_eq!(scheduler.task_count(), 2);
-    assert_eq!(scheduler.next(), Some(t1));
-    assert_eq!(scheduler.next(), Some(t3));
+    assert_eq!(scheduler.select_next(), Some(t1));
+    assert_eq!(scheduler.select_next(), Some(t3));
 }
 
 #[test]

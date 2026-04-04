@@ -356,13 +356,13 @@ impl FaultState {
         let skewed_elapsed = (elapsed_nanos as f64 * skew) as u64;
         
         // Apply offset
-        let with_offset = if offset >= 0 {
+        
+        
+        if offset >= 0 {
             base_nanos.saturating_add(skewed_elapsed).saturating_add(offset as u64)
         } else {
             base_nanos.saturating_add(skewed_elapsed).saturating_sub((-offset) as u64)
-        };
-        
-        with_offset
+        }
     }
 
     /// Clears clock skew for a specific node.

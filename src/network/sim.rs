@@ -120,7 +120,7 @@ impl NetworkSim {
         trace!(from, to, bytes = data.len(), "sending message");
 
         // Get or create link
-        let link = self.links.get_mut(&(from, to)).ok_or_else(|| {
+        let link = self.links.get_mut(&(from, to)).ok_or({
             crate::error::Error::NodeNotFound(to)
         })?;
 

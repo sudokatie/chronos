@@ -303,7 +303,7 @@ pub fn explore_command(args: ExploreArgs) -> Result<ExploreResult> {
                 // Print progress
                 let count = explored.load(Ordering::SeqCst);
                 let bug_count = bugs.lock().unwrap().len();
-                if count % 10 == 0 {
+                if count.is_multiple_of(10) {
                     print_progress(count, max_schedules, bug_count);
                 }
             }

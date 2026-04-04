@@ -27,11 +27,11 @@ impl Config {
     /// Load configuration from a TOML file.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let contents = std::fs::read_to_string(path)?;
-        Self::from_str(&contents)
+        Self::parse_str(&contents)
     }
 
     /// Parse configuration from a TOML string.
-    pub fn from_str(s: &str) -> Result<Self> {
+    pub fn parse_str(s: &str) -> Result<Self> {
         let config: Config = toml::from_str(s)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         config.validate()?;
@@ -461,7 +461,7 @@ mod tests {
             max_ms = 20
         "#;
 
-        let config = Config::from_str(toml).unwrap();
+        let config = Config::parse_str(toml).unwrap();
         assert_eq!(config.scheduler.strategy, "pct");
         assert_eq!(config.scheduler.seed, 42);
         assert_eq!(config.scheduler.iterations, 500);
@@ -488,7 +488,7 @@ mod tests {
             node = 1
         "#;
 
-        let config = Config::from_str(toml).unwrap();
+        let config = Config::parse_str(toml).unwrap();
         assert!(config.faults.enabled);
         assert_eq!(config.faults.schedule.len(), 3);
         assert_eq!(config.faults.schedule[0].fault, "partition");
@@ -506,7 +506,7 @@ mod tests {
             slow_pct = 0.3
         "#;
 
-        let config = Config::from_str(toml).unwrap();
+        let config = Config::parse_str(toml).unwrap();
         match config.network.latency {
             LatencyConfig::Bimodal { fast_ms, slow_ms, slow_pct } => {
                 assert_eq!(fast_ms, 1);
@@ -524,7 +524,7 @@ mod tests {
             strategy = "invalid"
         "#;
 
-        let result = Config::from_str(toml);
+        let result = Config::parse_str(toml);
         assert!(result.is_err());
     }
 
@@ -535,7 +535,7 @@ mod tests {
             drop_rate = 1.5
         "#;
 
-        let result = Config::from_str(toml);
+        let result = Config::parse_str(toml);
         assert!(result.is_err());
     }
 
@@ -550,7 +550,7 @@ mod tests {
             fault = "unknown_fault"
         "#;
 
-        let result = Config::from_str(toml);
+        let result = Config::parse_str(toml);
         assert!(result.is_err());
     }
 

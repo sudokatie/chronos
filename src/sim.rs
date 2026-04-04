@@ -22,7 +22,7 @@ use crate::time::{Clock, Instant, TimerId, TimerWheel};
 use crate::{NodeId, TaskId};
 
 thread_local! {
-    static SIM_CONTEXT: RefCell<Option<Arc<SimContextInner>>> = RefCell::new(None);
+    static SIM_CONTEXT: RefCell<Option<Arc<SimContextInner>>> = const { RefCell::new(None) };
 }
 
 /// A spawned task stored in the simulation context.
@@ -776,7 +776,7 @@ pub mod random {
     }
 
     /// Choose a random element from a slice.
-    pub fn choose<'a, T>(slice: &'a [T]) -> Option<&'a T> {
+    pub fn choose<T>(slice: &[T]) -> Option<&T> {
         use rand::seq::SliceRandom;
         with_context(|ctx| {
             let mut rng = ctx.rng.lock().unwrap();
@@ -1029,8 +1029,7 @@ pub mod fs {
             if vfs.read_fail_rate > 0.0 {
                 drop(vfs);
                 if random::chance(ctx.vfs.lock().unwrap().read_fail_rate) {
-                    return Err(crate::Error::Io(std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                    return Err(crate::Error::Io(std::io::Error::other(
                         "simulated read error",
                     )));
                 }
@@ -1060,8 +1059,7 @@ pub mod fs {
                 if vfs.write_fail_rate > 0.0 {
                     drop(vfs);
                     if random::chance(ctx.vfs.lock().unwrap().write_fail_rate) {
-                        return Err(crate::Error::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        return Err(crate::Error::Io(std::io::Error::other(
                             "simulated write error",
                         )));
                     }

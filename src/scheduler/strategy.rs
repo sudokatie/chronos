@@ -4,10 +4,12 @@ use crate::TaskId;
 
 /// Configuration for scheduling strategy.
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub enum Strategy {
     /// Random selection with given seed for reproducibility.
     Random { seed: u64 },
     /// First-in-first-out (deterministic baseline).
+    #[default]
     Fifo,
     /// Depth-first exploration with bounded stack.
     DepthFirst { max_depth: usize },
@@ -17,11 +19,6 @@ pub enum Strategy {
     ContextBound { max_preemptions: usize, seed: u64 },
 }
 
-impl Default for Strategy {
-    fn default() -> Self {
-        Strategy::Fifo
-    }
-}
 
 /// Trait for scheduling strategy implementations.
 pub trait ScheduleStrategy: Send {

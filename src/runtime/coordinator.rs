@@ -232,18 +232,20 @@ impl Runtime {
 
     /// Creates a runtime with default configuration.
     pub fn with_seed(seed: u64) -> Self {
-        let mut config = RuntimeConfig::default();
-        config.seed = seed;
-        Self::new(config)
+        Self::new(RuntimeConfig {
+            seed,
+            ..Default::default()
+        })
     }
 
     /// Creates a runtime with recording enabled.
     pub fn with_recording(seed: u64, path: impl Into<String>) -> Self {
-        let mut config = RuntimeConfig::default();
-        config.seed = seed;
-        config.recording_enabled = true;
-        config.recording_path = Some(path.into());
-        Self::new(config)
+        Self::new(RuntimeConfig {
+            seed,
+            recording_enabled: true,
+            recording_path: Some(path.into()),
+            ..Default::default()
+        })
     }
 
     /// Creates a runtime in replay mode.
@@ -252,22 +254,23 @@ impl Runtime {
         let reader = RecordingReader::open(&path_str)?;
         let seed = reader.seed();
         
-        let mut config = RuntimeConfig::default();
-        config.seed = seed;
-        config.replay_path = Some(path_str);
-        config.replay_verify = verify;
-        
-        Ok(Self::new(config))
+        Ok(Self::new(RuntimeConfig {
+            seed,
+            replay_path: Some(path_str),
+            replay_verify: verify,
+            ..Default::default()
+        }))
     }
 
     /// Creates a runtime with detection features enabled.
     pub fn with_detection(seed: u64, race_detection: bool) -> Self {
-        let mut config = RuntimeConfig::default();
-        config.seed = seed;
-        config.deadlock_detection = true;
-        config.livelock_detection = true;
-        config.race_detection = race_detection;
-        Self::new(config)
+        Self::new(RuntimeConfig {
+            seed,
+            deadlock_detection: true,
+            livelock_detection: true,
+            race_detection,
+            ..Default::default()
+        })
     }
 
     /// Check if we're in replay mode.
@@ -383,7 +386,7 @@ impl Runtime {
 
         // Normal mode: use scheduler
         let mut scheduler = self.scheduler.lock().unwrap();
-        scheduler.next().map(|chosen| (chosen, ready))
+        scheduler.select_next().map(|chosen| (chosen, ready))
     }
 
     /// Performs a single simulation step.

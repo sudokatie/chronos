@@ -136,7 +136,7 @@ fn test_config_loading() {
         livelock_threshold = 500
     "#;
     
-    let config = Config::from_str(toml).unwrap();
+    let config = Config::parse_str(toml).unwrap();
     
     assert_eq!(config.scheduler.strategy, "pct");
     assert_eq!(config.scheduler.seed, 12345);

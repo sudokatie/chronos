@@ -100,7 +100,7 @@ impl Scheduler {
     }
 
     /// Returns the next task to run, or None if no tasks are ready.
-    pub fn next(&mut self) -> Option<TaskId> {
+    pub fn select_next(&mut self) -> Option<TaskId> {
         if self.ready.is_empty() {
             trace!("no ready tasks");
             return None;
@@ -203,22 +203,22 @@ mod tests {
         s.add_task(); // 1
         s.add_task(); // 2
 
-        assert_eq!(s.next(), Some(0));
-        assert_eq!(s.next(), Some(1));
-        assert_eq!(s.next(), Some(2));
-        assert_eq!(s.next(), None);
+        assert_eq!(s.select_next(), Some(0));
+        assert_eq!(s.select_next(), Some(1));
+        assert_eq!(s.select_next(), Some(2));
+        assert_eq!(s.select_next(), None);
     }
 
     #[test]
     fn test_mark_ready() {
         let mut s = Scheduler::fifo();
         let id = s.add_task();
-        s.next(); // Remove from ready
+        s.select_next(); // Remove from ready
 
         assert!(!s.has_ready());
         s.mark_ready(id);
         assert!(s.has_ready());
-        assert_eq!(s.next(), Some(id));
+        assert_eq!(s.select_next(), Some(id));
     }
 
     #[test]

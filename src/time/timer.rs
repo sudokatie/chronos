@@ -41,7 +41,7 @@ impl TimerWheel {
 
         self.deadlines
             .entry(deadline)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((id, waker));
         self.id_to_deadline.insert(id, deadline);
 
