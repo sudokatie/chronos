@@ -11,7 +11,7 @@ use crate::time::Instant;
 
 /// A simulated network link between two nodes.
 ///
-/// Models latency, packet loss, and packet duplication.
+/// Models latency, packet loss, packet duplication, bandwidth limits, and reordering.
 #[derive(Debug)]
 pub struct Link {
     /// Latency model for this link.
@@ -22,6 +22,14 @@ pub struct Link {
     drop_rate: f64,
     /// Probability of duplicating a message (0.0 to 1.0).
     duplicate_rate: f64,
+    /// Probability of reordering messages (0.0 to 1.0).
+    reorder_rate: f64,
+    /// Bandwidth limit in bytes per second (0 = unlimited).
+    bandwidth_bps: u64,
+    /// Bytes sent in current time window.
+    bytes_in_window: u64,
+    /// Start of current bandwidth window.
+    window_start: Option<Instant>,
     /// Random number generator for deterministic simulation.
     rng: StdRng,
     /// Seed for reset.
@@ -36,6 +44,10 @@ impl Link {
             in_flight: VecDeque::new(),
             drop_rate: 0.0,
             duplicate_rate: 0.0,
+            reorder_rate: 0.0,
+            bandwidth_bps: 0,
+            bytes_in_window: 0,
+            window_start: None,
             rng: StdRng::seed_from_u64(seed),
             seed,
         }
@@ -46,18 +58,74 @@ impl Link {
         Self::new(LatencyModel::default(), seed)
     }
 
+    /// Sets the reorder rate (probability of reordering each message).
+    pub fn set_reorder_rate(&mut self, rate: f64) {
+        self.reorder_rate = rate.clamp(0.0, 1.0);
+    }
+
+    /// Returns the current reorder rate.
+    pub fn reorder_rate(&self) -> f64 {
+        self.reorder_rate
+    }
+
+    /// Sets the bandwidth limit in bytes per second (0 = unlimited).
+    pub fn set_bandwidth(&mut self, bytes_per_second: u64) {
+        self.bandwidth_bps = bytes_per_second;
+    }
+
+    /// Returns the current bandwidth limit.
+    pub fn bandwidth(&self) -> u64 {
+        self.bandwidth_bps
+    }
+
     /// Enqueues a message for delivery through this link.
     ///
-    /// The message may be dropped based on `drop_rate`, and may be
-    /// duplicated based on `duplicate_rate`.
+    /// The message may be dropped based on `drop_rate`, may be
+    /// duplicated based on `duplicate_rate`, and may be reordered
+    /// based on `reorder_rate`. Bandwidth limits are also enforced.
     pub fn enqueue(&mut self, msg: Message, now: Instant) {
         // Check for drop
         if self.rng.gen::<f64>() < self.drop_rate {
             return; // Message dropped
         }
 
+        // Check bandwidth limit
+        if self.bandwidth_bps > 0 {
+            let msg_size = msg.size() as u64;
+            
+            // Reset window if needed (1 second window)
+            let window_duration = std::time::Duration::from_secs(1);
+            if let Some(start) = self.window_start {
+                if now.duration_since(start).unwrap_or_default() >= window_duration {
+                    self.window_start = Some(now);
+                    self.bytes_in_window = 0;
+                }
+            } else {
+                self.window_start = Some(now);
+            }
+
+            // Check if we exceed bandwidth
+            if self.bytes_in_window + msg_size > self.bandwidth_bps {
+                // Queue delay: wait until next window
+                let extra_delay = window_duration;
+                let delay = self.latency.sample(&mut self.rng) + extra_delay;
+                let deliver_at = now.saturating_add(delay);
+                self.in_flight.push_back(InFlightMessage::new(msg, deliver_at));
+                return;
+            }
+            
+            self.bytes_in_window += msg_size;
+        }
+
         // Calculate delivery time
-        let delay = self.latency.sample(&mut self.rng);
+        let mut delay = self.latency.sample(&mut self.rng);
+        
+        // Apply reordering - add random extra delay
+        if self.rng.gen::<f64>() < self.reorder_rate {
+            let extra = self.latency.sample(&mut self.rng);
+            delay += extra;
+        }
+        
         let deliver_at = now.saturating_add(delay);
 
         // Enqueue the message
@@ -149,6 +217,8 @@ impl Link {
     /// Resets the link state.
     pub fn reset(&mut self) {
         self.in_flight.clear();
+        self.bytes_in_window = 0;
+        self.window_start = None;
         self.rng = StdRng::seed_from_u64(self.seed);
     }
 }

@@ -2,20 +2,57 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+use flate2::write::GzEncoder;
+use flate2::Compression;
+
 use crate::recording::{Event, Header};
 use crate::Result;
 
+/// Writer type enum to handle both compressed and uncompressed output.
+enum WriterInner {
+    Plain(BufWriter<File>),
+    Compressed(GzEncoder<BufWriter<File>>),
+}
+
+impl Write for WriterInner {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            WriterInner::Plain(w) => w.write(buf),
+            WriterInner::Compressed(w) => w.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            WriterInner::Plain(w) => w.flush(),
+            WriterInner::Compressed(w) => w.flush(),
+        }
+    }
+}
+
 /// Writer for recording execution traces to a file.
 pub struct RecordingWriter {
-    writer: BufWriter<File>,
+    writer: WriterInner,
     event_count: u64,
+    compressed: bool,
 }
 
 impl RecordingWriter {
     /// Create a new recording writer at the given path.
     pub fn new<P: AsRef<Path>>(path: P, header: Header) -> Result<Self> {
+        Self::with_compression(path, header, false)
+    }
+
+    /// Create a new recording writer with optional compression.
+    pub fn with_compression<P: AsRef<Path>>(path: P, header: Header, compress: bool) -> Result<Self> {
         let file = File::create(path)?;
-        let mut writer = BufWriter::new(file);
+        let buf_writer = BufWriter::new(file);
+        
+        let mut writer = if compress {
+            WriterInner::Compressed(GzEncoder::new(buf_writer, Compression::default()))
+        } else {
+            WriterInner::Plain(buf_writer)
+        };
 
         // Write header
         let header_bytes = bincode::serialize(&header)
@@ -25,7 +62,13 @@ impl RecordingWriter {
         Ok(Self {
             writer,
             event_count: 0,
+            compressed: compress,
         })
+    }
+
+    /// Create a compressed recording writer.
+    pub fn compressed<P: AsRef<Path>>(path: P, header: Header) -> Result<Self> {
+        Self::with_compression(path, header, true)
     }
 
     /// Write an event to the recording.
@@ -47,10 +90,26 @@ impl RecordingWriter {
         self.event_count
     }
 
+    /// Check if compression is enabled.
+    pub fn is_compressed(&self) -> bool {
+        self.compressed
+    }
+
     /// Finish writing and flush to disk.
-    pub fn finish(mut self) -> Result<u64> {
-        self.writer.flush()?;
-        Ok(self.event_count)
+    pub fn finish(self) -> Result<u64> {
+        let count = self.event_count;
+        
+        match self.writer {
+            WriterInner::Plain(mut w) => {
+                w.flush()?;
+            }
+            WriterInner::Compressed(w) => {
+                // finish() consumes the encoder and flushes
+                w.finish()?;
+            }
+        }
+        
+        Ok(count)
     }
 }
 
@@ -133,5 +192,46 @@ mod tests {
         assert!(writer.write_event(&event).is_ok());
 
         writer.finish().unwrap();
+    }
+
+    #[test]
+    fn test_compressed_writer() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.chrn.gz");
+
+        let header = Header::new(42, 1);
+        let mut writer = RecordingWriter::compressed(&path, header).unwrap();
+        
+        assert!(writer.is_compressed());
+
+        // Write many events to see compression benefit
+        for i in 0..1000 {
+            let event = Event::task_yield(i % 10, i as u64 * 100);
+            writer.write_event(&event).unwrap();
+        }
+
+        let count = writer.finish().unwrap();
+        assert_eq!(count, 1000);
+
+        // File should exist and be compressed (smaller than uncompressed would be)
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert!(metadata.len() > 0);
+    }
+
+    #[test]
+    fn test_with_compression_flag() {
+        let dir = tempdir().unwrap();
+        
+        // Test with compression = false
+        let path1 = dir.path().join("test1.chrn");
+        let writer1 = RecordingWriter::with_compression(&path1, Header::new(42, 1), false).unwrap();
+        assert!(!writer1.is_compressed());
+        writer1.finish().unwrap();
+
+        // Test with compression = true
+        let path2 = dir.path().join("test2.chrn.gz");
+        let writer2 = RecordingWriter::with_compression(&path2, Header::new(42, 1), true).unwrap();
+        assert!(writer2.is_compressed());
+        writer2.finish().unwrap();
     }
 }

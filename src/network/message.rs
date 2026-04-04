@@ -87,6 +87,7 @@ impl InFlightMessage {
     }
 
     /// Returns the latency (delivery time - sent time).
+    #[allow(dead_code)]
     pub fn latency(&self) -> std::time::Duration {
         self.deliver_at
             .duration_since(self.msg.sent_at)

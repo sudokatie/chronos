@@ -1,11 +1,14 @@
 //! Core scheduler for managing task execution order.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
+
+use tracing::trace;
 
 use crate::runtime::{BlockReason, WakeNotifier};
 use crate::TaskId;
 
+use super::context_bound::ContextBoundStrategy;
+use super::dfs::DFSStrategy;
 use super::pct::PCTStrategy;
 use super::random::RandomStrategy;
 use super::strategy::{FifoStrategy, ScheduleStrategy, Strategy};
@@ -34,14 +37,14 @@ impl Scheduler {
             Strategy::Random { seed } => {
                 Box::new(RandomStrategy::new(seed))
             }
-            Strategy::DepthFirst { max_depth: _ } => {
-                Box::new(FifoStrategy::new())
+            Strategy::DepthFirst { max_depth } => {
+                Box::new(DFSStrategy::new(max_depth))
             }
             Strategy::PCT { seed, bug_depth } => {
                 Box::new(PCTStrategy::new(seed, bug_depth))
             }
-            Strategy::ContextBound { max_preemptions: _ } => {
-                Box::new(FifoStrategy::new())
+            Strategy::ContextBound { max_preemptions, seed } => {
+                Box::new(ContextBoundStrategy::new(max_preemptions, seed))
             }
         };
 
@@ -99,11 +102,14 @@ impl Scheduler {
     /// Returns the next task to run, or None if no tasks are ready.
     pub fn next(&mut self) -> Option<TaskId> {
         if self.ready.is_empty() {
+            trace!("no ready tasks");
             return None;
         }
 
         let ready_vec: Vec<TaskId> = self.ready.iter().copied().collect();
         let chosen = self.strategy.select(&ready_vec);
+
+        trace!(chosen, ready = ?ready_vec, "schedule decision");
 
         // Remove chosen from ready queue
         self.ready.retain(|&t| t != chosen);

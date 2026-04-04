@@ -2,8 +2,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use rand::rngs::StdRng;
-use rand::SeedableRng;
+use tracing::{debug, trace};
 
 use super::fault::{Fault, FaultSchedule, FaultState};
 use super::latency::LatencyModel;
@@ -21,6 +20,10 @@ pub struct NetworkConfig {
     pub drop_rate: f64,
     /// Default duplicate rate for new links.
     pub duplicate_rate: f64,
+    /// Default reorder rate for new links.
+    pub reorder_rate: f64,
+    /// Default bandwidth limit in bytes per second (0 = unlimited).
+    pub bandwidth_bps: u64,
 }
 
 impl Default for NetworkConfig {
@@ -29,6 +32,8 @@ impl Default for NetworkConfig {
             latency: LatencyModel::default(),
             drop_rate: 0.0,
             duplicate_rate: 0.0,
+            reorder_rate: 0.0,
+            bandwidth_bps: 0,
         }
     }
 }
@@ -82,10 +87,14 @@ impl NetworkSim {
         let mut link_a = Link::new(self.config.latency.clone(), seed_a);
         link_a.set_drop_rate(self.config.drop_rate);
         link_a.set_duplicate_rate(self.config.duplicate_rate);
+        link_a.set_reorder_rate(self.config.reorder_rate);
+        link_a.set_bandwidth(self.config.bandwidth_bps);
 
         let mut link_b = Link::new(self.config.latency.clone(), seed_b);
         link_b.set_drop_rate(self.config.drop_rate);
         link_b.set_duplicate_rate(self.config.duplicate_rate);
+        link_b.set_reorder_rate(self.config.reorder_rate);
+        link_b.set_bandwidth(self.config.bandwidth_bps);
 
         self.links.insert((a, b), link_a);
         self.links.insert((b, a), link_b);
@@ -104,8 +113,11 @@ impl NetworkSim {
     pub fn send(&mut self, from: NodeId, to: NodeId, data: Vec<u8>, now: Instant) -> Result<()> {
         // Check partition
         if !self.fault_state.can_communicate(from, to) {
+            trace!(from, to, "message dropped: partitioned");
             return Ok(()); // Silently drop - partitioned
         }
+        
+        trace!(from, to, bytes = data.len(), "sending message");
 
         // Get or create link
         let link = self.links.get_mut(&(from, to)).ok_or_else(|| {
@@ -150,7 +162,8 @@ impl NetworkSim {
     /// Advances the simulation, delivering ready messages.
     pub fn tick(&mut self, now: Instant) {
         // Apply scheduled faults
-        for (_instant, fault) in self.fault_schedule.take_faults_until(now) {
+        for (instant, fault) in self.fault_schedule.take_faults_until(now) {
+            debug!(?fault, at_ns = instant.as_nanos(), "applying fault");
             self.fault_state.apply(&fault);
         }
 

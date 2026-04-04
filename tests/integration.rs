@@ -125,11 +125,14 @@ fn test_config_loading() {
         pct_depth = 5
 
         [network]
-        latency_ms = 50
         drop_rate = 0.01
 
+        [network.latency]
+        type = "fixed"
+        ms = 50
+
         [detection]
-        deadlock_detection = true
+        deadlock = true
         livelock_threshold = 500
     "#;
     
@@ -137,7 +140,7 @@ fn test_config_loading() {
     
     assert_eq!(config.scheduler.strategy, "pct");
     assert_eq!(config.scheduler.seed, 12345);
-    assert_eq!(config.network.latency_ms, 50);
+    assert!(matches!(config.network.latency, chronos::config::LatencyConfig::Fixed { ms: 50 }));
     assert_eq!(config.detection.livelock_threshold, 500);
 }
 
@@ -199,7 +202,7 @@ fn test_cli_explore_parsing() {
             assert_eq!(args.test_binary, "my_test");
             assert_eq!(args.depth, 200);
             assert_eq!(args.threads, 4);
-            assert_eq!(args.seed, Some(123));
+            assert_eq!(args.seed, 123);
         }
         _ => panic!("expected Explore command"),
     }

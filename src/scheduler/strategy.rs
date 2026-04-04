@@ -14,7 +14,7 @@ pub enum Strategy {
     /// Probabilistic Concurrency Testing.
     PCT { seed: u64, bug_depth: usize },
     /// Bound the number of context switches.
-    ContextBound { max_preemptions: usize },
+    ContextBound { max_preemptions: usize, seed: u64 },
 }
 
 impl Default for Strategy {

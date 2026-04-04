@@ -190,7 +190,7 @@ mod tests {
         // At some point, the selection should change due to priority inversion
         // Task 1 starts with highest priority but should get demoted
         let first_choice = selections[0];
-        let has_different = selections.iter().any(|&s| s != first_choice);
+        let _has_different = selections.iter().any(|&s| s != first_choice);
         
         // With change points, we should see different choices
         // (unless change point falls after our test range)

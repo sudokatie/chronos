@@ -14,10 +14,10 @@ pub enum Error {
     },
 
     /// A livelock was detected (tasks running but making no progress).
-    #[error("livelock detected: {} tasks stuck without progress", stuck_tasks.len())]
+    #[error("livelock detected: {} tasks stuck without progress", tasks.len())]
     Livelock {
         /// Tasks that are stuck in a livelock.
-        stuck_tasks: Vec<TaskId>,
+        tasks: Vec<TaskId>,
     },
 
     /// An assertion failed during simulation.
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_livelock_display() {
         let err = Error::Livelock {
-            stuck_tasks: vec![1, 2],
+            tasks: vec![1, 2],
         };
         assert!(err.to_string().contains("2 tasks stuck"));
     }

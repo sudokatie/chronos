@@ -1,6 +1,5 @@
 //! Custom waker implementation for scheduler integration.
 
-use std::cell::RefCell;
 use std::sync::{Arc, Weak};
 use std::task::{RawWaker, RawWakerVTable, Waker};
 
