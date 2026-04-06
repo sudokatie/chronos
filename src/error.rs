@@ -14,10 +14,12 @@ pub enum Error {
     },
 
     /// A livelock was detected (tasks running but making no progress).
-    #[error("livelock detected: {} tasks stuck without progress", tasks.len())]
+    #[error("livelock detected: tasks {stuck_tasks:?} made no progress for {steps} steps")]
     Livelock {
         /// Tasks that are stuck in a livelock.
-        tasks: Vec<TaskId>,
+        stuck_tasks: Vec<TaskId>,
+        /// Number of steps without progress.
+        steps: u64,
     },
 
     /// An assertion failed during simulation.
@@ -30,10 +32,10 @@ pub enum Error {
     },
 
     /// Simulation exceeded the time limit.
-    #[error("timeout after {simulated_nanos}ns of simulated time")]
+    #[error("timeout after {simulated_time:?} simulated time")]
     Timeout {
-        /// Simulated time in nanoseconds when timeout occurred.
-        simulated_nanos: u64,
+        /// Simulated time when timeout occurred.
+        simulated_time: std::time::Duration,
     },
 
     /// Replay diverged from the recorded execution.
@@ -94,9 +96,11 @@ mod tests {
     #[test]
     fn test_livelock_display() {
         let err = Error::Livelock {
-            tasks: vec![1, 2],
+            stuck_tasks: vec![1, 2],
+            steps: 10000,
         };
-        assert!(err.to_string().contains("2 tasks stuck"));
+        assert!(err.to_string().contains("[1, 2]"));
+        assert!(err.to_string().contains("10000"));
     }
 
     #[test]
@@ -112,9 +116,9 @@ mod tests {
     #[test]
     fn test_timeout_display() {
         let err = Error::Timeout {
-            simulated_nanos: 1_000_000_000,
+            simulated_time: std::time::Duration::from_secs(60),
         };
-        assert!(err.to_string().contains("1000000000ns"));
+        assert!(err.to_string().contains("60s"));
     }
 
     #[test]

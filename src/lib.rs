@@ -258,6 +258,63 @@ pub mod assertions {
 // Re-export assertion functions at crate root for convenience
 pub use assertions::{assert, assert_always, assert_eventually};
 
+// ============================================================================
+// Assertion Macros (spec-compliant macro versions)
+// ============================================================================
+
+/// Assert a condition in a simulation test.
+///
+/// This macro provides better error messages with file/line information.
+///
+/// # Example
+/// ```ignore
+/// chronos::assert!(node.is_alive(), "node should be alive");
+/// ```
+#[macro_export]
+macro_rules! assert {
+    ($cond:expr, $msg:expr) => {
+        $crate::assertions::assert($cond, $msg)
+    };
+    ($cond:expr) => {
+        $crate::assertions::assert($cond, stringify!($cond))
+    };
+}
+
+/// Assert that a condition will eventually become true.
+///
+/// Registers the assertion with the simulation runtime to be checked
+/// continuously until it becomes true or times out.
+///
+/// # Example
+/// ```ignore
+/// chronos::assert_eventually!(|| cluster.is_stable(), "cluster should stabilize");
+/// ```
+#[macro_export]
+macro_rules! assert_eventually {
+    ($cond:expr, $msg:expr) => {
+        $crate::assertions::assert_eventually($cond, $msg)
+    };
+    ($cond:expr, $msg:expr, $timeout:expr) => {
+        $crate::assertions::assert_eventually_within($cond, $msg, $timeout)
+    };
+}
+
+/// Assert that a condition remains true throughout the simulation.
+///
+/// Registers the assertion with the simulation runtime to be checked
+/// at every step. Fails immediately if the condition ever becomes false.
+///
+/// # Example
+/// ```ignore
+/// chronos::assert_always!(|| count.load(Ordering::SeqCst) >= 0, "count must not go negative");
+/// ```
+#[macro_export]
+macro_rules! assert_always {
+    ($cond:expr, $msg:expr) => {
+        $crate::assertions::assert_always($cond, $msg)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

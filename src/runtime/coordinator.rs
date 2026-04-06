@@ -77,8 +77,8 @@ pub enum StepResult {
     NoProgress,
     /// All tasks completed.
     Complete,
-    /// Livelock detected.
-    Livelock(Vec<TaskId>),
+    /// Livelock detected with stuck tasks and steps without progress.
+    Livelock { stuck_tasks: Vec<TaskId>, steps: u64 },
     /// Data race detected.
     RaceDetected,
 }
@@ -414,7 +414,10 @@ impl Runtime {
         // 4. Check for livelock
         if self.config.livelock_detection {
             if let Some(stuck_tasks) = self.livelock_detector.check() {
-                return StepResult::Livelock(stuck_tasks);
+                return StepResult::Livelock { 
+                    stuck_tasks, 
+                    steps: self.config.livelock_threshold,
+                };
             }
         }
 
@@ -524,7 +527,7 @@ impl Runtime {
             if let Some(elapsed) = self.clock.now().duration_since(start) {
                 if elapsed >= max_time {
                     return Err(crate::error::Error::Timeout {
-                        simulated_nanos: self.clock.now().as_nanos(),
+                        simulated_time: std::time::Duration::from_nanos(self.clock.now().as_nanos()),
                     });
                 }
             }
@@ -544,8 +547,8 @@ impl Runtime {
                     self.finish_recording();
                     return Ok(());
                 }
-                StepResult::Livelock(tasks) => {
-                    return Err(crate::error::Error::Livelock { tasks });
+                StepResult::Livelock { stuck_tasks, steps } => {
+                    return Err(crate::error::Error::Livelock { stuck_tasks, steps });
                 }
                 StepResult::RaceDetected => {
                     // Continue but race is logged
@@ -566,8 +569,8 @@ impl Runtime {
                     return Ok(());
                 }
                 StepResult::NoProgress => break,
-                StepResult::Livelock(tasks) => {
-                    return Err(crate::error::Error::Livelock { tasks });
+                StepResult::Livelock { stuck_tasks, steps } => {
+                    return Err(crate::error::Error::Livelock { stuck_tasks, steps });
                 }
                 _ => {}
             }
