@@ -3,13 +3,15 @@
 mod analyze;
 mod explore;
 mod inject;
+pub mod junit;
 mod output;
 mod replay;
 mod run;
 
 pub use analyze::{analyze_command, AnalyzeArgs, AnalysisResult};
-pub use explore::{explore_command, ExploreArgs, ExploreResult};
+pub use explore::{explore_command, ExploreArgs, ExploreResult, Bug};
 pub use inject::{inject_command, FaultSpec, InjectArgs, InjectResult};
+pub use junit::{TestSuite, TestCase, Failure, from_run_result, from_explore_result};
 pub use output::{print_success, print_failure, print_header, print_kv, print_info, print_warning, print_error, TraceEntry};
 pub use replay::{replay_command, ReplayArgs, ReplayExecutor, ReplayResult};
 pub use run::{run_command, RunArgs, RunResult};

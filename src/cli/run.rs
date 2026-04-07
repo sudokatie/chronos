@@ -101,6 +101,14 @@ pub struct RunArgs {
     #[arg(long)]
     pub cargo: bool,
 
+    /// CI mode: minimal output, exit code reflects test status.
+    #[arg(long)]
+    pub ci: bool,
+
+    /// Output JUnit XML to this file.
+    #[arg(long)]
+    pub junit: Option<PathBuf>,
+
     /// Additional arguments to pass to the test binary.
     #[arg(last = true)]
     pub args: Vec<String>,
@@ -147,6 +155,8 @@ pub struct RunConfig {
     pub replay_path: Option<PathBuf>,
     pub verbose: bool,
     pub cargo: bool,
+    pub ci: bool,
+    pub junit_path: Option<PathBuf>,
     pub extra_args: Vec<String>,
 }
 
@@ -162,8 +172,10 @@ impl From<&RunArgs> for RunConfig {
             timeout: Duration::from_secs(args.timeout.unwrap_or(60)),
             record_path: args.record.clone(),
             replay_path: args.replay.clone(),
-            verbose: args.verbose,
+            verbose: args.verbose && !args.ci,  // CI mode suppresses verbose
             cargo: args.cargo,
+            ci: args.ci,
+            junit_path: args.junit.clone(),
             extra_args: args.args.clone(),
         }
     }
@@ -194,22 +206,44 @@ pub fn run_command(args: RunArgs) -> Result<RunResult> {
     }
 
     // Check if we should run via cargo test or directly
-    if config.cargo {
-        return run_cargo_test(&config);
-    }
-
-    // Check if the binary exists
-    let binary_path = PathBuf::from(&config.test_binary);
-    if !binary_path.exists() && !config.test_binary.starts_with("cargo") {
-        // Try running as cargo test
-        if config.verbose {
-            print_info("Binary not found, trying cargo test...");
+    let result = if config.cargo {
+        run_cargo_test(&config)?
+    } else {
+        // Check if the binary exists
+        let binary_path = PathBuf::from(&config.test_binary);
+        if !binary_path.exists() && !config.test_binary.starts_with("cargo") {
+            // Try running as cargo test
+            if config.verbose {
+                print_info("Binary not found, trying cargo test...");
+            }
+            run_cargo_test(&config)?
+        } else {
+            // Run the test binary with chronos environment variables
+            run_binary(&config)?
         }
-        return run_cargo_test(&config);
+    };
+
+    // Write JUnit XML if requested
+    if let Some(ref junit_path) = config.junit_path {
+        let suite = super::junit::from_run_result(&result, &config.test_binary);
+        suite.write_to_file(junit_path).map_err(|e| {
+            crate::error::Error::Io(e)
+        })?;
+        if config.ci {
+            eprintln!("JUnit report written to: {:?}", junit_path);
+        }
     }
 
-    // Run the test binary with chronos environment variables
-    run_binary(&config)
+    // In CI mode, print minimal status
+    if config.ci && config.junit_path.is_none() {
+        if result.bugs_found > 0 {
+            eprintln!("FAIL: {} bugs found (seed={})", result.bugs_found, result.seed_used);
+        } else {
+            eprintln!("PASS: {} schedules explored", result.schedules_explored);
+        }
+    }
+
+    Ok(result)
 }
 
 /// Run a test binary directly.
@@ -485,6 +519,8 @@ mod tests {
             max_preemptions: 3,
             dfs_depth: 100,
             cargo: false,
+            ci: false,
+            junit: None,
             args: vec![],
         };
         assert_eq!(args.effective_seed(), 999);
@@ -505,6 +541,8 @@ mod tests {
             max_preemptions: 3,
             dfs_depth: 100,
             cargo: false,
+            ci: false,
+            junit: None,
             args: vec![],
         };
         let seed = args.effective_seed();
@@ -526,6 +564,8 @@ mod tests {
             max_preemptions: 3,
             dfs_depth: 100,
             cargo: false,
+            ci: false,
+            junit: None,
             args: vec!["--extra".to_string()],
         };
 
@@ -538,5 +578,31 @@ mod tests {
         assert_eq!(config.timeout, Duration::from_secs(30));
         assert!(config.verbose);
         assert_eq!(config.extra_args, vec!["--extra"]);
+    }
+
+    #[test]
+    fn test_ci_mode_config() {
+        let args = RunArgs {
+            test_binary: "test".to_string(),
+            seed: Some(42),
+            strategy: StrategyArg::Random,
+            iterations: 1,
+            timeout: None,
+            record: None,
+            replay: None,
+            verbose: true,  // Should be suppressed by CI mode
+            pct_depth: 3,
+            max_preemptions: 3,
+            dfs_depth: 100,
+            cargo: false,
+            ci: true,
+            junit: Some(PathBuf::from("results.xml")),
+            args: vec![],
+        };
+
+        let config = RunConfig::from(&args);
+        assert!(config.ci);
+        assert!(!config.verbose);  // CI mode suppresses verbose
+        assert!(config.junit_path.is_some());
     }
 }
