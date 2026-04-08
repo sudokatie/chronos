@@ -36,6 +36,7 @@ pub mod runtime;
 pub mod scheduler;
 pub mod sim;
 pub mod time;
+pub mod viz;
 
 // Re-export the test macro from chronos-macros (when available)
 #[cfg(feature = "macros")]
