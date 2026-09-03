@@ -1,7 +1,7 @@
 //! Message sequence diagram generation
 
 use crate::recording::{Event, EventPayload};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// A message in the sequence diagram
 #[derive(Debug, Clone)]
@@ -27,7 +27,7 @@ pub struct SequenceDiagram {
     /// Messages between tasks
     messages: Vec<SequenceMessage>,
     /// Pending sends (not yet received)
-    pending: HashMap<(u32, u32, usize), u64>, // (from, to, size) -> send_time
+    pending: HashMap<(u32, u32, usize), VecDeque<u64>>, // (from, to, size) -> send times
 }
 
 impl SequenceDiagram {
@@ -49,13 +49,19 @@ impl SequenceDiagram {
             EventPayload::NetSend { dst, data } => {
                 // Record pending send
                 let key = (event.task_id, *dst, data.len());
-                self.pending.insert(key, event.timestamp);
+                self.pending
+                    .entry(key)
+                    .or_default()
+                    .push_back(event.timestamp);
             }
             EventPayload::NetRecv { src, data } => {
                 // Match with pending send
                 let key = (*src, event.task_id, data.len());
-                let send_time = self.pending.remove(&key);
-                
+                let send_time = self.pending.get_mut(&key).and_then(VecDeque::pop_front);
+                if self.pending.get(&key).is_some_and(VecDeque::is_empty) {
+                    self.pending.remove(&key);
+                }
+
                 self.messages.push(SequenceMessage {
                     from: *src,
                     to: event.task_id,
@@ -106,17 +112,20 @@ impl SequenceDiagram {
 
     /// Get messages involving a specific task
     pub fn messages_for_task(&self, task_id: u32) -> Vec<&SequenceMessage> {
-        self.messages.iter()
+        self.messages
+            .iter()
             .filter(|m| m.from == task_id || m.to == task_id)
             .collect()
     }
 
     /// Get average message latency
     pub fn avg_latency_ns(&self) -> Option<u64> {
-        let latencies: Vec<u64> = self.messages.iter()
+        let latencies: Vec<u64> = self
+            .messages
+            .iter()
             .filter_map(|m| m.recv_time.map(|r| r.saturating_sub(m.send_time)))
             .collect();
-        
+
         if latencies.is_empty() {
             None
         } else {
@@ -146,15 +155,15 @@ mod tests {
     #[test]
     fn single_message() {
         let mut diagram = SequenceDiagram::new();
-        
+
         diagram.add_event(&Event::task_spawn(1, 0, "sender".to_string(), 0));
         diagram.add_event(&Event::task_spawn(2, 0, "receiver".to_string(), 0));
         diagram.add_event(&Event::net_send(1, 100, 2, vec![1, 2, 3]));
         diagram.add_event(&Event::net_recv(2, 150, 1, vec![1, 2, 3]));
-        
+
         assert_eq!(diagram.participant_count(), 2);
         assert_eq!(diagram.message_count(), 1);
-        
+
         let msg = &diagram.messages()[0];
         assert_eq!(msg.from, 1);
         assert_eq!(msg.to, 2);
@@ -166,18 +175,18 @@ mod tests {
     #[test]
     fn multiple_messages() {
         let mut diagram = SequenceDiagram::new();
-        
+
         diagram.add_event(&Event::task_spawn(1, 0, "a".to_string(), 0));
         diagram.add_event(&Event::task_spawn(2, 0, "b".to_string(), 0));
-        
+
         // Message 1: a -> b
         diagram.add_event(&Event::net_send(1, 100, 2, vec![1]));
         diagram.add_event(&Event::net_recv(2, 150, 1, vec![1]));
-        
+
         // Message 2: b -> a
         diagram.add_event(&Event::net_send(2, 200, 1, vec![2, 3]));
         diagram.add_event(&Event::net_recv(1, 250, 2, vec![2, 3]));
-        
+
         assert_eq!(diagram.message_count(), 2);
         assert_eq!(diagram.total_bytes(), 3);
     }
@@ -185,14 +194,14 @@ mod tests {
     #[test]
     fn active_participants() {
         let mut diagram = SequenceDiagram::new();
-        
+
         diagram.add_event(&Event::task_spawn(1, 0, "a".to_string(), 0));
         diagram.add_event(&Event::task_spawn(2, 0, "b".to_string(), 0));
         diagram.add_event(&Event::task_spawn(3, 0, "c".to_string(), 0)); // No messages
-        
+
         diagram.add_event(&Event::net_send(1, 100, 2, vec![1]));
         diagram.add_event(&Event::net_recv(2, 150, 1, vec![1]));
-        
+
         let active = diagram.active_participants();
         assert!(active.contains(&1));
         assert!(active.contains(&2));
@@ -202,31 +211,47 @@ mod tests {
     #[test]
     fn average_latency() {
         let mut diagram = SequenceDiagram::new();
-        
+
         diagram.add_event(&Event::task_spawn(1, 0, "a".to_string(), 0));
         diagram.add_event(&Event::task_spawn(2, 0, "b".to_string(), 0));
-        
+
         // Latency: 50
         diagram.add_event(&Event::net_send(1, 100, 2, vec![1]));
         diagram.add_event(&Event::net_recv(2, 150, 1, vec![1]));
-        
+
         // Latency: 100
         diagram.add_event(&Event::net_send(1, 200, 2, vec![1]));
         diagram.add_event(&Event::net_recv(2, 300, 1, vec![1]));
-        
+
         assert_eq!(diagram.avg_latency_ns(), Some(75)); // (50 + 100) / 2
+    }
+
+    #[test]
+    fn repeated_same_route_and_size_sends_match_fifo() {
+        let mut diagram = SequenceDiagram::new();
+
+        diagram.add_event(&Event::task_spawn(1, 0, "sender".to_string(), 0));
+        diagram.add_event(&Event::task_spawn(2, 0, "receiver".to_string(), 0));
+        diagram.add_event(&Event::net_send(1, 100, 2, vec![1, 2]));
+        diagram.add_event(&Event::net_send(1, 110, 2, vec![3, 4]));
+        diagram.add_event(&Event::net_recv(2, 150, 1, vec![9, 9]));
+        diagram.add_event(&Event::net_recv(2, 160, 1, vec![8, 8]));
+
+        assert_eq!(diagram.message_count(), 2);
+        assert_eq!(diagram.messages()[0].send_time, 100);
+        assert_eq!(diagram.messages()[1].send_time, 110);
     }
 
     #[test]
     fn messages_for_task() {
         let mut diagram = SequenceDiagram::new();
-        
+
         diagram.add_event(&Event::task_spawn(1, 0, "a".to_string(), 0));
         diagram.add_event(&Event::task_spawn(2, 0, "b".to_string(), 0));
-        
+
         diagram.add_event(&Event::net_send(1, 100, 2, vec![1]));
         diagram.add_event(&Event::net_recv(2, 150, 1, vec![1]));
-        
+
         let msgs = diagram.messages_for_task(1);
         assert_eq!(msgs.len(), 1);
     }
